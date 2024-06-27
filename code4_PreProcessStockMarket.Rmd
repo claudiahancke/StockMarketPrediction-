@@ -1,0 +1,61 @@
+---
+title: "FIG1.stockmarket"
+output: html_document
+date: "2023-02-21"
+---
+
+```{r}
+library(ggplot2)
+```
+
+#Historical record of the stock market
+The historical record of the stock market from February 1st to March 19th
+```{r}
+#load companies data
+abbv <- read.csv("/home/sarai/da/feb1March19/stock/ABBV_stockMarket_round2_feb1-mar19.csv")
+abbv$comapany<-"abbv"
+azn <- read.csv("/home/sarai/da/feb1March19/stock/AZN_stockMarket_round2_feb1-mar19.csv")
+azn$comapany<-"azn"
+#little exception with bayer, time zone NY not working, I used bayern.de
+bayn <- read.csv("/home/sarai/da/feb1March19/stock/BAYN.DE_stockMarket_round2_feb1-mar19.csv")
+#bayn$comapany<-"abbv"
+jnj <- read.csv("/home/sarai/da/feb1March19/stock/JNJ_stockMarket_round2_feb1-mar19.csv")
+jnj$comapany<-"jnj"
+lly <- read.csv("/home/sarai/da/feb1March19/stock/LLY_stockMarket_round2_feb1-mar19.csv")
+lly$comapany<-"lly"
+mrk <- read.csv("/home/sarai/da/feb1March19/stock/MRK_stockMarket_round2_feb1-mar19.csv")
+mrk$comapany<-"mrk"
+mrna <- read.csv("/home/sarai/da/feb1March19/stock/MRNA_stockMarket_round2_feb1-mar19.csv")
+mrna$comapany<-"mrna"
+nvo <- read.csv("/home/sarai/da/feb1March19/stock/NVO_stockMarket_round2_feb1-mar19.csv")
+nvo$comapany<-"nvo"
+nvs <- read.csv("/home/sarai/da/feb1March19/stock/NVS_stockMarket_round2_feb1-mar19.csv")
+nvs$comapany<-"nvs"
+pfe <- read.csv("/home/sarai/da/feb1March19/stock/PFE_stockMarket_round2_feb1-mar19.csv")
+pfe$comapany<-"pfe"
+rhhby <- read.csv("/home/sarai/da/feb1March19/stock/RHHBY_stockMarket_round2_feb1-mar19.csv")
+rhhby$comapany<-"rhhby"
+#not in NY
+#wx <- read.csv("../python/data/stock/WX_stockMarket_round2_feb1-20.csv")
+#wx$comapany<-"wx"
+
+#join them
+stock<-rbind(abbv[,c(1:2,10)], azn[,c(1:2,10)], jnj[,c(1:2,10)], lly[,c(1:2,10)],mrk[,c(1:2,10)],mrna[,c(1:2,10)],nvo[,c(1:2,10)],nvs[,c(1:2,10)],pfe[,c(1:2,10)], rhhby[,c(1:2,10)])
+#save data as rdata
+save(stock, file = "stock_feb1Mar1.RData")
+
+# create a named vector with the company codes and names
+company_names <- c("abbv" = "AbbVie", "azn" = "AstraZeneca", "bayn" = "Bayer", "jnj" = "Johnson & Johnson", "lly" = "Eli Lilly", "mrk" = "Merck", "mrna" = "Moderna", "nvo" = "Novo Nordisk", "nvs" = "Novartis", "pfe" = "Pfizer", "rhhby" = "Roche")
+
+# replace the company codes with the company names
+stock$comapany <- company_names[as.character(stock$comapany)]
+
+# plot the data
+ggplot(data=stock, aes(x=Datetime, y=Open, group=comapany, color=comapany)) +
+  geom_line() +
+  geom_point() +
+  scale_color_brewer(palette="Paired") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(title="Stock market open over time by company", xlab= "Date", ylab="Open of stock")
+
+```

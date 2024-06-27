@@ -1,0 +1,420 @@
+---
+title: "1.ExploratoryAnalysis"
+output: html_document
+date: "2023-02-20"
+---
+#Libraries
+```{r}
+library(readr)
+library(stringr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+library(scales)
+library(gridExtra)
+```
+
+#Load data
+```{r}
+# Get a list of all txt files in the directory
+txt_files <- list.files(path = "./feb1March19/", pattern = "*.txt", full.names = TRUE)
+
+# Loop through the files and read them into separate data frames
+for (file in txt_files) {
+  # Extract the file name without the extension
+  file_name <- gsub("\\.txt", "", basename(file))
+  
+  # Read the txt file and save it as a data frame
+  assign(file_name, read_delim(file, delim = "\t", col_names = c("tweet_id", "created_at", "updated_at", "tweet", "negative", "neutral", "positive", "overall"), col_types = cols(), na = ""))
+
+}
+```
+
+#Preprocesing of the data
+```{r}
+#filter some problematic tweets
+# if they are NA in sentiment remove 
+Moderna <- Moderna[!is.na(Moderna$overall), ]
+Roche <- Roche[!is.na(Roche$overall), ]
+
+# Convert tweet_id column to character in all data frames
+##companies
+AbbVie$tweet_id <- as.character(AbbVie$tweet_id)
+Merck$tweet_id <- as.character(Merck$tweet_id)
+Pfizer$tweet_id <- as.character(Pfizer$tweet_id)
+AstraZeneca$tweet_id <- as.character(AstraZeneca$tweet_id)
+Moderna$tweet_id <- as.character(Moderna$tweet_id)
+Roche$tweet_id <- as.character(Roche$tweet_id)
+EliLilly$tweet_id <- as.character(EliLilly$tweet_id)
+Nordisk$tweet_id <- as.character(Nordisk$tweet_id)
+JohnsonJohnson$tweet_id <- as.character(JohnsonJohnson$tweet_id)
+Novartis$tweet_id <- as.character(Novartis$tweet_id)
+##ceos
+Albert$tweet_id <- as.character(Albert$tweet_id)	
+Joaquin$tweet_id <- as.character(Joaquin$tweet_id)	
+Lars$tweet_id <- as.character(Lars$tweet_id)	
+Richard$tweet_id <- as.character(Richard$tweet_id)	
+Stephane$tweet_id <- as.character(Stephane$tweet_id)
+David$tweet_id <- as.character(David$tweet_id)	
+Kenneth$tweet_id <- as.character(Kenneth$tweet_id)	
+Pascal$tweet_id <- as.character(Pascal$tweet_id)	
+Severin$tweet_id <- as.character(Severin$tweet_id)	
+Vas$tweet_id <- as.character(Vas$tweet_id)
+##news
+Covid$tweet_id <- as.character(Covid$tweet_id)	
+Vaccine$tweet_id <- as.character(Vaccine$tweet_id)
+
+#Smarter decision will be to join all data in the same data frame for furute fast transofmrations
+# Add a column with the company name to the companies data frame
+AbbVie$company <- "AbbVie"
+Merck$company <- "Merck"
+Pfizer$company <- "Pfizer"
+AstraZeneca$company <- "AstraZeneca"
+Moderna$company <- "Moderna"
+Roche$company <- "Roche"
+EliLilly$company <- "EliLilly"
+Nordisk$company <- "Nordisk"
+JohnsonJohnson$company <- "JohnsonJohnson"
+Novartis$company <- "Novartis"
+Albert$company <- NA
+Joaquin$company <- NA
+Lars$company <- NA
+Richard$company <- NA
+Stephane$company <- NA
+David$company <- NA
+Kenneth$company <- NA
+Pascal$company <- NA
+Severin$company <- NA
+Vas$company <- NA
+Covid$company <- NA
+Vaccine$company <- NA
+#ceos
+AbbVie$ceos <- NA
+Merck$ceos <- NA
+Pfizer$ceos <- NA
+AstraZeneca$ceos <- NA
+Moderna$ceos <- NA
+Roche$ceos <- NA
+EliLilly$ceos <- NA
+Nordisk$ceos <- NA
+JohnsonJohnson$ceos <- NA
+Novartis$ceos <- NA
+Albert$ceos <- "Pfizer"
+Joaquin$ceos <- "Johnson&Johnson"
+Lars$ceos <- "NovoNordisk"
+Richard$ceos <- "AbbVie"
+Stephane$ceos <- "Moderna"
+David$ceos <- "EliLilly"
+Kenneth$ceos <- "Merck"
+Pascal$ceos <- "AstraZeneca"
+Severin$ceos <- "Roche"
+Vas$ceos <- "Norvartis"
+Covid$ceos <- NA
+Vaccine$ceos <- NA
+#news
+AbbVie$news <- NA
+Merck$news <- NA
+Pfizer$news <- NA
+AstraZeneca$news <- NA
+Moderna$news <- NA
+Roche$news <- NA
+EliLilly$news <- NA
+Nordisk$news <- NA
+JohnsonJohnson$news <- NA
+Novartis$news <- NA
+Albert$news <- NA
+Joaquin$news <- NA
+Lars$news <- NA
+Richard$news <- NA
+Stephane$news <- NA
+David$news <- NA
+Kenneth$news <- NA
+Pascal$news <- NA
+Severin$news <- NA
+Vas$news <- NA
+Covid$news <- "covid"
+Vaccine$news <- "vaccine"
+
+#correct format creat at 
+AbbVie$created_at <- as.POSIXct(AbbVie$created_at, format = "%Y-%m-%d %H:%M:%S")
+AbbVie$updated_at <- as.POSIXct(AbbVie$updated_at, format = "%Y-%m-%d %H:%M:%S")
+Merck$created_at <- as.POSIXct(Merck$created_at, format = "%Y-%m-%d %H:%M:%S")
+Merck$updated_at <- as.POSIXct(Merck$updated_at, format = "%Y-%m-%d %H:%M:%S")
+Pfizer$created_at <- as.POSIXct(Pfizer$created_at, format = "%Y-%m-%d %H:%M:%S")
+Pfizer$updated_at <- as.POSIXct(Pfizer$updated_at, format = "%Y-%m-%d %H:%M:%S")
+AstraZeneca$created_at <- as.POSIXct(AstraZeneca$created_at, format = "%Y-%m-%d %H:%M:%S")
+AstraZeneca$updated_at <- as.POSIXct(AstraZeneca$updated_at, format = "%Y-%m-%d %H:%M:%S")
+Moderna$created_at <- as.POSIXct(Moderna$created_at, format = "%Y-%m-%dT%H:%M:%S")
+Moderna$updated_at <- as.POSIXct(Moderna$updated_at, format = "%Y-%m-%dT%H:%M:%S")
+Roche$created_at <- as.POSIXct(Roche$created_at, format = "%Y-%m-%dT%H:%M:%SZ")
+Roche$updated_at <- as.POSIXct(Roche$updated_at, format = "%Y-%m-%dT%H:%M:%SZ")
+EliLilly$created_at <- as.POSIXct(EliLilly$created_at, format = "%Y-%m-%d %H:%M:%S")
+EliLilly$updated_at <- as.POSIXct(EliLilly$updated_at, format = "%Y-%m-%d %H:%M:%S")
+Nordisk$created_at <- as.POSIXct(Nordisk$created_at, format = "%Y-%m-%d %H:%M:%S")
+Nordisk$updated_at <- as.POSIXct(Nordisk$updated_at, format = "%Y-%m-%d %H:%M:%S")
+JohnsonJohnson$created_at <- as.POSIXct(JohnsonJohnson$created_at, format = "%Y-%m-%d %H:%M:%S")
+JohnsonJohnson$updated_at <- as.POSIXct(JohnsonJohnson$updated_at, format = "%Y-%m-%d %H:%M:%S")
+Novartis$created_at <- as.POSIXct(Novartis$created_at, format = "%Y-%m-%d %H:%M:%S")
+Novartis$updated_at <- as.POSIXct(Novartis$updated_at, format = "%Y-%m-%d %H:%M:%S")
+
+
+#join all data
+allData <- rbind(AbbVie, Merck, Pfizer, AstraZeneca, Moderna, Roche, EliLilly, Nordisk, JohnsonJohnson, Novartis, Albert, Joaquin, Lars, Richard, Stephane, David, Kenneth, Pascal, Severin, Vas, Covid, Vaccine)
+
+
+
+#Round time 
+# Round POSIXct date/time
+round.POSIXct <- function(x, units = c("mins", "5 mins", "10 mins", "15 
+mins", "quarter hours", "30 mins", "half hours", "hours"), na.rm=TRUE){
+	if(is.numeric(units)) units <- as.character(units)
+	units <- match.arg(units)
+	r <- switch(units,
+		"mins" = 60,
+		"5 mins" = 60*5,
+		"10 mins" = 60*10,
+		"15 mins"=, "quarter hours" = 60*15,
+		"30 mins"=, "half hours" = 60*30,
+		"hours" = 60*60
+	)
+	H <- as.integer(format(x, "%H"))
+	M <- as.integer(format(x, "%M"))
+	S <- as.integer(format(x, "%S"))
+	D <- format(x, "%Y-%m-%d")
+	secs <- 3600*H + 60*M + S
+	as.POSIXct(round(secs/r)*r, origin=D, na.rm=na.rm)
+}
+
+# Convert updated_at to POSIXct format
+allData$created_at <- as.POSIXct(allData$created_at, format = "%Y-%m-%d %H:%M:%S", tz="Europe/Zurich")
+
+# Round the updated_at time to the nearest hour
+allData$roundTimeEnd <- round.POSIXct(allData$created_at, "5 mins", na.rm=TRUE)
+
+# Add NY times by converting the Zurich times
+attr(allData$roundTimeEnd, "tzone") <- "America/New_York"
+
+
+# Add NY times by converting the Zurich times
+attr(allData$roundTimeEnd, "tzone") <- "America/New_York"
+
+# KEEP data when the stock market in NY are open, 9:30 to 15:30 
+allData <- allData %>%
+               filter(hour(roundTimeEnd) >= 9 & hour(roundTimeEnd) <= 15,
+                      minute(roundTimeEnd) >= 30)
+
+
+
+
+
+
+
+```
+
+
+#EXPLORATORY ANALYSIS
+Show which companies/ceos/news are popular and have an opinion
+#companies
+```{r}
+# Number of tweets over time of every company 
+companyData <- allData %>% filter(!is.na(company))
+
+# count per time 
+companyTweets<- companyData[,c(9,12)]
+companyTweets$day <- as.Date(companyTweets$roundTimeEnd)
+
+# count the number of tweets per day
+dailyTweets <- companyTweets %>%
+  count(day, company, name = "n_tweets")
+
+ggplot(dailyTweets, aes(x = day, y = n_tweets, color = company)) +
+  geom_point(size = 3) +
+  geom_line(aes(group = company), size = 0.5, alpha = 0.7) +
+  labs(title = "Number of tweets per day by company", subtitle = "February 1st - March 19th, 2023", x = "Date",  y = "Number of tweets") +
+  theme_bw() +
+  scale_x_date(date_labels = "%B %d", breaks = seq(as.Date("2023-02-01"), as.Date("2023-03-19"), by = "10 day")) +
+  guides(linetype = FALSE)
+```
+
+#ceos
+```{r}
+
+# Number of tweets over time of every company 
+ceosData <- allData %>% filter(!is.na(ceos))
+
+# count per time 
+ceosTweets<- ceosData[,c(10,12)]
+ceosTweets$day <- as.Date(ceosTweets$roundTimeEnd)
+
+# count the number of tweets per day
+dailyTweets <- ceosTweets %>%
+  count(day, ceos, name = "n_tweets")
+
+ggplot(dailyTweets, aes(x = day, y = n_tweets, color = ceos)) +
+  geom_point(size = 3) +
+  geom_line(aes(group = ceos), size = 0.5, alpha = 0.7) +
+  labs(title = "Number of tweets per day by ceos", subtitle = "February 1st - March 19th, 2023", x = "Date",  y = "Number of tweets") +
+  theme_bw() +
+  scale_x_date(date_labels = "%B %d", breaks = seq(as.Date("2023-02-01"), as.Date("2023-03-19"), by = "10 day")) +
+  guides(linetype = FALSE)
+
+```
+
+#news
+```{r}
+# Number of tweets over time of every company 
+newsData <- allData %>% filter(!is.na(news))
+
+# count per time 
+newsTweets <- newsData[,c(11,12)]
+newsTweets$day <- as.Date(newsTweets$roundTimeEnd)
+
+# count the number of tweets per day
+dailyTweets <- newsTweets %>%
+  mutate(day = as.Date(roundTimeEnd)) %>%
+  count(day, news, name = "n_tweets")
+
+ggplot(dailyTweets, aes(x = day, y = n_tweets, color = news)) +
+  geom_point(size = 3) +
+  geom_line(aes(group = news), size = 0.5, alpha = 0.7) +
+  scale_color_manual(values = c("blue", "red"), labels = c("COVID-related", "Vaccine-related")) +
+  labs(title = "Number of tweets per day by news type", subtitle = "February 1st - March 19th, 2023", x = "Date",  y = "Number of tweets") +
+  theme_bw() +
+  scale_x_date(date_labels = "%B %d", breaks = seq(as.Date("2023-02-01"), as.Date("2023-03-19"), by = "10 day")) +
+  guides(linetype = FALSE)
+
+
+
+```
+
+## Sentyment analysis
+Analysis of negative, positive,neutral and overall scores of sentiment analysis 
+#companies
+```{r}
+#Sentyment analysis of negative, neutral and positive 
+# create a new data frame with only the columns we need
+df <- companyData[, c("company", "negative", "neutral", "positive")]
+# melt the data frame to long format for easier plotting
+df <- reshape2::melt(df, id.vars = "company", variable.name = "sentiment")
+df$value<-as.numeric(df$value)
+#distinct 
+n_distinct(companyData$company)
+
+# create a violin plot with facet wrap for each company
+ggplot(df, aes(x = sentiment, y = value, fill = sentiment)) +
+  geom_violin() +
+  scale_fill_manual(values = c("#d7191c", "#fdae61", "#abdda4")) +
+  labs(x = "", y = "Sentiment Score", fill = "Sentiment") +
+  theme_classic() +
+  facet_wrap(~company, ncol = 5) +
+  labs(title="Distribution of the negative, neutral and positive sentiment score per company")
+
+#Sentyment analysis of overall
+# create a new data frame with only the columns we need
+df <- companyData[, c("company", "overall")]
+# melt the data frame to long format for easier plotting
+df <- reshape2::melt(df, id.vars = "company", variable.name = "sentiment")
+df$value<-as.numeric(df$value)
+
+# create a violin plot with facet wrap for each company
+ggplot(df, aes(x = sentiment, y = value, fill = sentiment)) +
+  geom_violin() +
+  scale_fill_manual(values = "#2c7bb6") +
+  labs(x = "", y = "Sentiment Score", fill = "Sentiment") +
+  theme_classic() +
+  facet_wrap(~company, ncol = 5) +
+  labs(title="Distribution of overall sentiment score per company")
+
+
+```
+
+#news
+```{r}
+#Sentyment analysis of negative, neutral and positive 
+# create a new data frame with only the columns we need
+df <- newsData[, c("news", "negative", "neutral", "positive")]
+# melt the data frame to long format for easier plotting
+df <- reshape2::melt(df, id.vars = "news", variable.name = "sentiment")
+df$value<-as.numeric(df$value)
+
+# create a violin plot with facet wrap for each company
+ggplot(df, aes(x = sentiment, y = value, fill = sentiment)) +
+  geom_violin() +
+  scale_fill_manual(values = c("#d7191c", "#fdae61", "#abdda4")) +
+  labs(x = "", y = "Sentiment Score", fill = "Sentiment") +
+  theme_classic() +
+  facet_wrap(~news, ncol = 4) +
+  labs(title="Distribution of the negative, neutral and positive sentiment score per news")
+
+#Sentyment analysis of overall
+# create a new data frame with only the columns we need
+df <- newsData[, c("news", "overall")]
+# melt the data frame to long format for easier plotting
+df <- reshape2::melt(df, id.vars = "news", variable.name = "sentiment")
+df$value<-as.numeric(df$value)
+
+# create a violin plot with facet wrap for each company
+ggplot(df, aes(x = sentiment, y = value, fill = sentiment)) +
+  geom_violin() +
+  scale_fill_manual(values = "#2c7bb6") +
+  labs(x = "", y = "Sentiment Score", fill = "Sentiment") +
+  theme_classic() +
+  facet_wrap(~news, ncol = 4) +
+  labs(title="Distribution of overall sentiment score per news")
+```
+
+#CEOs
+```{r}
+#Sentyment analysis of negative, neutral and positive 
+# create a new data frame with only the columns we need
+df <- ceosData[, c("ceos", "negative", "neutral", "positive")]
+# melt the data frame to long format for easier plotting
+df <- reshape2::melt(df, id.vars = "ceos", variable.name = "sentiment")
+df$value<-as.numeric(df$value)
+#distinct 
+n_distinct(companyData$company)
+
+# create a violin plot with facet wrap for each company
+ggplot(df, aes(x = sentiment, y = value, fill = sentiment)) +
+  geom_violin() +
+  scale_fill_manual(values = c("#d7191c", "#fdae61", "#abdda4")) +
+  labs(x = "", y = "Sentiment Score", fill = "Sentiment") +
+  theme_classic() +
+  facet_wrap(~ceos, ncol = 5) +
+  labs(title="Distribution of the negative, neutral and positive sentiment score per ceos")
+
+#Sentyment analysis of overall
+# create a new data frame with only the columns we need
+df <- ceosData[, c("ceos", "overall")]
+# melt the data frame to long format for easier plotting
+df <- reshape2::melt(df, id.vars = "ceos", variable.name = "sentiment")
+df$value<-as.numeric(df$value)
+
+# create a violin plot with facet wrap for each company
+ggplot(df, aes(x = sentiment, y = value, fill = sentiment)) +
+  geom_violin() +
+  scale_fill_manual(values = "#2c7bb6") +
+  labs(x = "", y = "Sentiment Score", fill = "Sentiment") +
+  theme_classic() +
+  facet_wrap(~ceos, ncol = 5) +
+  labs(title="Distribution of overall sentiment score per ceos")
+
+```
+
+#SAVE DATA
+```{r}
+#Save all data included tweet
+save(allData, file = "allData_vf1b1Mar19.RData")
+#load("stuff.RData")
+
+#Save data withou tweet 
+allDataNoTweet<-allData[,-4]
+save(allDataNoTweet, file = "allDataNoTweet_vf1b1Mar19.RData")
+
+```
+
+
+
+
+

@@ -1,0 +1,486 @@
+---
+title: "Final4.VectorAutroregression"
+output: html_document
+date: "2023-04-21"
+---
+#Libraries
+```{r}
+# load the lubridate library for date-time operations
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+#install.packages("weights")
+#install.packages("vars")
+library(forecast)
+library(vars)
+library(tidyverse)
+library(xts)
+library(tibbletime)
+library(tidyquant)
+library(SnowballC)
+library(quantmod)
+library(syuzhet)
+library(gridExtra)
+#library(weights)
+library(GGally)
+
+library(caret)
+
+
+```
+
+#Load Data and preprocessing 
+```{r}
+#load tweet data and stock data
+load("allSentiments_vf1b1Mar19_protect.RData")
+
+```
+
+#Model by VAR 
+Need covariates data, we can not only do it with historical record
+
+#Use sentyments as covariates 
+#company
+```{r}
+# Split data into training and testing sets
+train_data <- allSentimentsdata %>% filter(roundTimeEnd >= as.POSIXct("2023-02-01") & roundTimeEnd <= as.POSIXct("2023-03-07"))
+test_data <- allSentimentsdata %>% filter(roundTimeEnd > as.POSIXct("2023-03-07") & roundTimeEnd <= as.POSIXct("2023-03-19"))
+
+# Fit a VAR model for each company
+models <- list()
+for (c in unique(allSentimentsdata$company)) {
+  c_data <- allSentimentsdata %>% filter(company == c)
+  ts_data <- cbind(c_data$Open, c_data$companyS)
+  colnames(ts_data) <- c("Open", "companyS")
+  var_model <- vars::VAR(ts_data, p = 1, type = "const") # Change p to the desired number of lags
+  models[[c]] <- var_model
+}
+
+# Make predictions on the test set
+predictions <- list()
+for (c in unique(test_data$company)) {
+  c_model <- models[[c]]
+  c_test_data <- test_data %>% filter(company == c)
+  ts_test_data <- cbind(c_test_data$Open, c_test_data$companyS)
+  colnames(ts_test_data) <- c("Open", "companyS")
+  c_pred_values <- c()
+  c_pred <- predict(c_model, n.ahead = length(ts_test_data))
+  c_pred_values <- c_pred$fcst$Open[, 1]
+  predictions[[c]] <- c_pred_values
+}
+
+# Combine predictions into one dataframe
+predictions_df <- data.frame(company = character(),
+                             date = as.POSIXct(character()),
+                             predicted_open = numeric(),
+                             actual_open = numeric(),
+                             stringsAsFactors = FALSE)
+for (c in unique(test_data$company)) {
+  c_test_data <- test_data %>% filter(company == c)
+  c_pred_values <- predictions[[c]]
+  pred_df <- data.frame(company = c,
+                        date = c_test_data$roundTimeEnd,
+                        predicted_open = c_pred_values,
+                        actual_open = c_test_data$Open,
+                        stringsAsFactors = FALSE)
+  predictions_df <- rbind(predictions_df, pred_df)
+}
+
+##PLOT COMPANIES PREDICTION SEPARATED
+ggplot(predictions_df, aes(x = date, y = predicted_open, group = company)) +
+  geom_blank(data = predictions_df %>% filter(weekdays(date) == "Saturday" | weekdays(date) == "Sunday")) +
+  geom_line(aes(color = "Predicted")) +
+  geom_line(aes(y = actual_open, color = "Actual")) +
+  scale_color_manual(values = c("Predicted" = "red", "Actual" = "blue")) +
+  facet_wrap(~ company, scales = "free_y") +
+  labs(x = "Date", y = "Open Price", color = "Price Type") +
+          ggtitle("Market prediction based on perception of companies") +
+  theme_bw() +
+  scale_x_datetime(date_labels = "%b %d", date_breaks = "3 day", expand = c(0, 0)) 
+ggsave("Fig4_stockPrediction_historicalseparated.png")
+
+
+# Evaluate them 
+# Evaluate them 
+Epredictions_HRC <- predictions_df
+#MAPE 
+mapeHRC <- Epredictions_HRC %>%
+  dplyr::group_by(company) %>%
+  dplyr::summarize(mape = mean(abs((actual_open - predicted_open)/actual_open)) * 100) %>%
+  dplyr::ungroup()
+mapeHRC[11,] = c(as.character("Mean"), as.list(mean(mapeHRC$mape)))
+
+```
+
+#covid
+```{r}
+
+# Split data into training and testing sets
+train_data <- allSentimentsdata %>% filter(roundTimeEnd >= as.POSIXct("2023-02-01") & roundTimeEnd <= as.POSIXct("2023-03-07"))
+test_data <- allSentimentsdata %>% filter(roundTimeEnd > as.POSIXct("2023-03-07") & roundTimeEnd <= as.POSIXct("2023-03-19"))
+
+# Fit a VAR model for each company
+models <- list()
+for (c in unique(train_data$company)) {
+  c_data <- train_data %>% filter(company == c)
+  ts_data <- cbind(c_data$Open, c_data$covidS)
+  colnames(ts_data) <- c("Open", "covidS")
+  var_model <- vars::VAR(ts_data, p = 1, type = "const") # Change p to the desired number of lags
+  models[[c]] <- var_model
+}
+
+# Make predictions on the test set
+predictions <- list()
+for (c in unique(test_data$company)) {
+  c_model <- models[[c]]
+  c_test_data <- test_data %>% filter(company == c)
+  n <- nrow(c_test_data)
+  c_pred <- predict(c_model, n.ahead = n)
+  c_pred_values <- c_pred$fcst$Open[,1]
+  predictions[[c]] <- c_pred_values
+}
+
+# Combine predictions into one dataframe
+predictions_df <- data.frame(company = character(),
+                             date = as.POSIXct(character()),
+                             predicted_open = numeric(),
+                             actual_open = numeric(),
+                             stringsAsFactors = FALSE)
+for (c in unique(test_data$company)) {
+  c_test_data <- test_data %>% filter(company == c)
+  c_pred_values <- predictions[[c]]
+  pred_df <- data.frame(company = c,
+                        date = c_test_data$roundTimeEnd,
+                        predicted_open = c_pred_values,
+                        actual_open = c_test_data$Open,
+                        stringsAsFactors = FALSE)
+  predictions_df <- rbind(predictions_df, pred_df)
+}
+
+
+##PLOT COMPANIES PREDICTION SEPARATED
+##PLOT COMPANIES PREDICTION SEPARATED
+ggplot(predictions_df, aes(x = date, y = predicted_open, group = company)) +
+  geom_blank(data = predictions_df %>% filter(weekdays(date) == "Saturday" | weekdays(date) == "Sunday")) +
+  geom_line(aes(color = "Predicted")) +
+  geom_line(aes(y = actual_open, color = "Actual")) +
+  scale_color_manual(values = c("Predicted" = "red", "Actual" = "blue")) +
+  facet_wrap(~ company, scales = "free_y") +
+  labs(x = "Date", y = "Open Price", color = "Price Type") +
+  ggtitle("Market prediction based on perception of covid") +
+  theme_bw() +
+  scale_x_datetime(date_labels = "%b %d", date_breaks = "3 day", expand = c(0, 0)) 
+ggsave("Fig4_stockPrediction_historicalseparated.png")
+
+
+
+
+
+# Evaluate them 
+# Evaluate them 
+Epredictions_HRCo <- predictions_df
+#MAPE 
+mapeHRCo <- Epredictions_HRCo %>%
+  dplyr::group_by(company) %>%
+  dplyr::summarize(mape = mean(abs((actual_open - predicted_open)/actual_open)) * 100) %>%
+  dplyr::ungroup()
+mapeHRCo[11,] = c(as.character("Mean"), as.list(mean(mapeHRCo$mape)))
+
+
+```
+
+#vaccine
+```{r}
+# Split data into training and testing sets
+train_data <- allSentimentsdata %>% filter(roundTimeEnd >= as.POSIXct("2023-02-01") & roundTimeEnd <= as.POSIXct("2023-03-07"))
+test_data <- allSentimentsdata %>% filter(roundTimeEnd > as.POSIXct("2023-03-07") & roundTimeEnd <= as.POSIXct("2023-03-19"))
+
+# Fit a VAR model for each company
+models <- list()
+for (c in unique(train_data$company)) {
+  c_data <- train_data %>% filter(company == c)
+  ts_data <- cbind(c_data$Open, c_data$vaccineS)
+  colnames(ts_data) <- c("Open", "vaccineS")
+  var_model <- vars::VAR(ts_data, p = 1, type = "const") # Change p to the desired number of lags
+  models[[c]] <- var_model
+}
+
+# Make predictions on the test set
+predictions <- list()
+for (c in unique(test_data$company)) {
+  c_model <- models[[c]]
+  c_test_data <- test_data %>% filter(company == c)
+  n <- nrow(c_test_data)
+  c_pred <- predict(c_model, n.ahead = n)
+  c_pred_values <- c_pred$fcst$Open[,1]
+  predictions[[c]] <- c_pred_values
+}
+
+# Combine predictions into one dataframe
+predictions_df <- data.frame(company = character(),
+                             date = as.POSIXct(character()),
+                             predicted_open = numeric(),
+                             actual_open = numeric(),
+                             stringsAsFactors = FALSE)
+for (c in unique(test_data$company)) {
+  c_test_data <- test_data %>% filter(company == c)
+  c_pred_values <- predictions[[c]]
+  pred_df <- data.frame(company = c,
+                        date = c_test_data$roundTimeEnd,
+                        predicted_open = c_pred_values,
+                        actual_open = c_test_data$Open,
+                        stringsAsFactors = FALSE)
+  predictions_df <- rbind(predictions_df, pred_df)
+}
+
+
+##PLOT COMPANIES PREDICTION SEPARATED
+ggplot(predictions_df, aes(x = date, y = predicted_open, group = company)) +
+  geom_blank(data = predictions_df %>% filter(weekdays(date) == "Saturday" | weekdays(date) == "Sunday")) +
+  geom_line(aes(color = "Predicted")) +
+  geom_line(aes(y = actual_open, color = "Actual")) +
+  scale_color_manual(values = c("Predicted" = "red", "Actual" = "blue")) +
+  facet_wrap(~ company, scales = "free_y") +
+  labs(x = "Date", y = "Open Price", color = "Price Type") +
+  ggtitle("Market prediction based on perception of vaccines") +
+  theme_bw() +
+  scale_x_datetime(date_labels = "%b %d", date_breaks = "3 day", expand = c(0, 0)) 
+ggsave("Fig4_stockPrediction_historicalseparated.png")
+
+
+
+
+#MAPE
+# Evaluate them 
+Epredictions_HRV <- predictions_df
+#MAPE 
+mapeHRV <- Epredictions_HRV %>%
+  dplyr::group_by(company) %>%
+  dplyr::summarize(mape = mean(abs((actual_open - predicted_open)/actual_open)) * 100) %>%
+  dplyr::ungroup()
+mapeHRV[11,] = c(as.character("Mean"), as.list(mean(mapeHRV$mape)))
+
+```
+
+#ceos
+```{r}
+# Fit a VAR model for each company
+models <- list()
+for (c in unique(train_data$company)) {
+  c_data <- train_data %>% filter(company == c)
+  ts_data <- cbind(c_data$Open, c_data$ceosS)
+  ts_data <- na.omit(ts_data)
+  if(nrow(ts_data) > 1){
+    colnames(ts_data) <- c("Open", "ceosS")
+    var_model <- vars::VAR(ts_data, p = 1, type = "const") # Change p to the desired number of lags
+    models[[c]] <- var_model
+  }
+}
+
+# Make predictions on the test set
+predictions <- list()
+for (c in unique(test_data$company)) {
+  c_model <- models[[c]]
+  c_test_data <- test_data %>% filter(company == c)
+  n <- nrow(c_test_data)
+  ts_test_data <- cbind(c_test_data$Open, c_test_data$ceosS)
+  ts_test_data <- na.omit(ts_test_data)
+  if(nrow(ts_test_data) > 1){
+    c_pred <- predict(c_model, n.ahead = n)
+    c_pred_values <- c_pred$fcst$Open[,1]
+    predictions[[c]] <- c_pred_values
+  }
+}
+
+# Combine predictions into one dataframe
+predictions_df <- data.frame(company = character(),
+                             date = as.POSIXct(character()),
+                             predicted_open = numeric(),
+                             actual_open = numeric(),
+                             stringsAsFactors = FALSE)
+for (c in unique(test_data$company)) {
+  c_test_data <- test_data %>% filter(company == c)
+  c_pred_values <- predictions[[c]]
+  pred_df <- data.frame(company = c,
+                        date = c_test_data$roundTimeEnd,
+                        predicted_open = c_pred_values,
+                        actual_open = c_test_data$Open,
+                        stringsAsFactors = FALSE)
+  predictions_df <- rbind(predictions_df, pred_df)
+}
+
+
+##PLOT COMPANIES PREDICTION SEPARATED
+ggplot(predictions_df, aes(x = date, y = predicted_open, group = company)) +
+  geom_blank(data = predictions_df %>% filter(weekdays(date) == "Saturday" | weekdays(date) == "Sunday")) +
+  geom_line(aes(color = "Predicted")) +
+  geom_line(aes(y = actual_open, color = "Actual")) +
+  scale_color_manual(values = c("Predicted" = "red", "Actual" = "blue")) +
+  facet_wrap(~ company, scales = "free_y") +
+  labs(x = "Date", y = "Open Price", color = "Price Type") +
+  ggtitle("Market prediction based on perception of CEOs") +
+  theme_bw() +
+  scale_x_datetime(date_labels = "%b %d", date_breaks = "3 day", expand = c(0, 0)) 
+ggsave("Fig4_stockPrediction_historicalseparated.png")
+
+
+
+# Calculate MAPE
+# Evaluate them 
+Epredictions_HRCe <- predictions_df
+#MAPE 
+mapeHRCe <- Epredictions_HRCe %>%
+  dplyr::group_by(company) %>%
+  dplyr::summarize(mape = mean(abs((actual_open - predicted_open)/actual_open)) * 100) %>%
+  dplyr::ungroup()
+mapeHRCe[11,] = c(as.character("Mean"), as.list(mean(mapeHRCe$mape)))
+```
+
+#competitors
+```{r}
+# Split data into training and testing sets
+train_data <- allSentimentsdata %>% filter(roundTimeEnd >= as.POSIXct("2023-02-01") & roundTimeEnd <= as.POSIXct("2023-03-07"))
+test_data <- allSentimentsdata %>% filter(roundTimeEnd > as.POSIXct("2023-03-07") & roundTimeEnd <= as.POSIXct("2023-03-19"))
+
+# Fit a VAR model for each company
+models <- list()
+for (c in unique(allSentimentsdata$company)) {
+  c_data <- allSentimentsdata %>% filter(company == c)
+  ts_data <- cbind(c_data$Open, c_data$competitorsS)
+  colnames(ts_data) <- c("Open", "competitorsS")
+  var_model <- vars::VAR(ts_data, p = 1, type = "const") # Change p to the desired number of lags
+  models[[c]] <- var_model
+}
+
+# Make predictions on the test set
+predictions <- list()
+for (c in unique(test_data$company)) {
+  c_model <- models[[c]]
+  c_test_data <- test_data %>% filter(company == c)
+  ts_test_data <- ts(c_test_data$Open, frequency = 1, start = c_test_data$roundTimeEnd[1])
+  c_pred_values <- c()
+  covariates <- cbind(c_test_data$competitorsS)
+  colnames(covariates) <- "competitorsS"
+  c_pred <- predict(c_model, newdata = covariates, n.ahead = length(ts_test_data))
+  c_pred_values <- c(c_pred$fcst$Open[,1])
+  predictions[[c]] <- c_pred_values
+}
+
+# Combine predictions into one dataframe
+predictions_df <- data.frame(company = character(),
+                             date = as.POSIXct(character()),
+                             predicted_open = numeric(),
+                             actual_open = numeric(),
+                             stringsAsFactors = FALSE)
+for (c in unique(test_data$company)) {
+  c_test_data <- test_data %>% filter(company == c)
+  c_pred_values <- predictions[[c]]
+  pred_df <- data.frame(company = c,
+                        date = c_test_data$roundTimeEnd,
+                        predicted_open = c_pred_values,
+                        actual_open = c_test_data$Open,
+                        stringsAsFactors = FALSE)
+  predictions_df <- rbind(predictions_df, pred_df)
+}
+
+
+##PLOT COMPANIES PREDICTION SEPARATED
+ggplot(predictions_df, aes(x = date, y = predicted_open, group = company)) +
+  geom_blank(data = predictions_df %>% filter(weekdays(date) == "Saturday" | weekdays(date) == "Sunday")) +
+  geom_line(aes(color = "Predicted")) +
+  geom_line(aes(y = actual_open, color = "Actual")) +
+  scale_color_manual(values = c("Predicted" = "red", "Actual" = "blue")) +
+  facet_wrap(~ company, scales = "free_y") +
+  labs(x = "Date", y = "Open Price", color = "Price Type") +
+  ggtitle("Market prediction based on perception of competitors") +
+  theme_bw() +
+  scale_x_datetime(date_labels = "%b %d", date_breaks = "3 day", expand = c(0, 0)) 
+ggsave("Fig4_stockPrediction_historicalseparated.png")
+
+
+# MAPE
+# Evaluate them 
+# Evaluate them 
+Epredictions_HRCom <- predictions_df
+#MAPE 
+mapeHRCom <- Epredictions_HRCom %>%
+  dplyr::group_by(company) %>%
+  dplyr::summarize(mape = mean(abs((actual_open - predicted_open)/actual_open)) * 100) %>%
+  dplyr::ungroup()
+mapeHRCom[11,] = c(as.character("Mean"), as.list(mean(mapeHRCom$mape)))
+```
+
+#All covariates 
+```{r}
+# Split data into training and testing sets
+train_data <- allSentimentsdata %>% filter(roundTimeEnd >= as.POSIXct("2023-02-01") & roundTimeEnd <= as.POSIXct("2023-03-07"))
+test_data <- allSentimentsdata %>% filter(roundTimeEnd > as.POSIXct("2023-03-07") & roundTimeEnd <= as.POSIXct("2023-03-19"))
+
+# Fit a VAR model for each company
+models <- list()
+for (c in unique(train_data$company)) {
+  c_data <- train_data %>% filter(company == c)
+  c_data <- na.omit(c_data)  # Remove NAs from the data
+  ts_data <- cbind(c_data$Open, c_data$ceosS, c_data$competitorsS, c_data$vaccineS, c_data$covidS)
+  colnames(ts_data) <- c("Open", "ceosS", "competitorsS", "vaccineS", "covidS")
+  var_model <- vars::VAR(ts_data, p = 1, type = "const") # Change p to the desired number of lags
+  models[[c]] <- var_model
+}
+
+# Make predictions on the test set
+predictions <- list()
+for (c in unique(test_data$company)) {
+  c_model <- models[[c]]
+  c_test_data <- test_data %>% filter(company == c)
+  ts_test_data <- cbind(c_test_data$Open, c_test_data$ceosS, c_test_data$competitorsS, c_test_data$vaccineS, c_test_data$covidS)
+  colnames(ts_test_data) <- c("Open", "ceosS", "competitorsS", "vaccineS", "covidS")
+  n <- nrow(c_test_data)
+  c_pred <- predict(c_model, newdata = ts_test_data, n.ahead = n)
+  c_pred_values <- c_pred$fcst$Open[,1]
+  predictions[[c]] <- c_pred_values
+}
+
+# Combine predictions into one dataframe
+predictions_df <- data.frame(company = character(),
+                             date = as.POSIXct(character()),
+                             predicted_open = numeric(),
+                             actual_open = numeric(),
+                             stringsAsFactors = FALSE)
+for (c in unique(test_data$company)) {
+  c_test_data <- test_data %>% filter(company == c)
+  c_pred_values <- predictions[[c]]
+  pred_df <- data.frame(company = c,
+                        date = c_test_data$roundTimeEnd,
+                        predicted_open = c_pred_values,
+                        actual_open = c_test_data$Open,
+                        stringsAsFactors = FALSE)
+  predictions_df <- rbind(predictions_df, pred_df)
+}
+
+##PLOT COMPANIES PREDICTION SEPARATED
+ggplot(predictions_df, aes(x = date, y = predicted_open, group = company)) +
+  geom_blank(data = predictions_df %>% filter(weekdays(date) == "Saturday" | weekdays(date) == "Sunday")) +
+  geom_line(aes(color = "Predicted")) +
+  geom_line(aes(y = actual_open, color = "Actual")) +
+  scale_color_manual(values = c("Predicted" = "red", "Actual" = "blue")) +
+  facet_wrap(~ company, scales = "free_y") +
+  labs(x = "Date", y = "Open Price", color = "Price Type") +
+  ggtitle("Market prediction based on perception of companies, CEOs, news and competitors") +
+  theme_bw() +
+  scale_x_datetime(date_labels = "%b %d", date_breaks = "3 day", expand = c(0, 0)) 
+ggsave("Fig4_stockPrediction_historicalseparated.png")
+
+
+# MAPE
+# Evaluate them 
+# Evaluate them 
+Epredictions_HRA <- predictions_df
+#MAPE 
+mapeHRA <- Epredictions_HRA %>%
+  dplyr::group_by(company) %>%
+  dplyr::summarize(mape = mean(abs((actual_open - predicted_open)/actual_open)) * 100) %>%
+  dplyr::ungroup()
+mapeHRA[11,] = c(as.character("Mean"), as.list(mean(mapeHRA$mape)))
+```
+
+
