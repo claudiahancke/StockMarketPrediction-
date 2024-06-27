@@ -16,4 +16,4 @@ Note: Make sure to have all the necessary inputs in the correct location before 
 
 Step 4: After running all the notebooks, the results will be saved in the corresponding folders.
 
-That's it! If you have any issues or questions, please contactme claudiasarai.1030@gmail.com.
+That's it! If you have any issues or questions, please contact me claudia.hancke.avila@gmail.com
